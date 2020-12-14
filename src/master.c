@@ -17,6 +17,10 @@
 
 // on peut ici définir une structure stockant tout ce dont le master
 // a besoin
+typedef struct {
+    int nbPrime;
+    int highestPrime;
+} *master;
 
 
 /************************************************************************
