@@ -146,6 +146,11 @@ int main(int argc, char * argv[])
             bool result = false; 
             // lecture du résultat sur le deuxième tube nommé
             my_read(fd2, &result, sizeof(bool));
+
+            if (result)
+                printf("Le nombre %d est premier\n", number);
+            else
+                printf("Le nombre %d n'est pas premier\n", number);
         }
         // si l'ordre correspond à ORDER_HOW_MANY_PRIME ou ORDER_HIGHEST_PRIME
         else if (order == ORDER_HOW_MANY_PRIME || order == ORDER_HIGHEST_PRIME){
@@ -153,6 +158,8 @@ int main(int argc, char * argv[])
             int result;
             // lecture du résultat sur le deuxième tube nommé 
             my_read(fd2, &result, sizeof(int));
+
+            printf("Résultat : %d", result);
         }
         // si l'ordre correspond à ORDER_STOP
         else if (order == ORDER_STOP) {
@@ -160,6 +167,11 @@ int main(int argc, char * argv[])
             bool stop;
             // lecture du résultat sur le deuxième tube nommé
             my_read(fd2, &stop, sizeof(bool));
+
+            if (stop)
+                printf("Accusé de réception reçu, aurevoir\n");
+            else
+                printf("Erreur : le master n'a pas validé la fin de la communication\n");
         }
 
         // sortie de la section critique

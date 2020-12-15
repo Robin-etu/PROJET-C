@@ -27,7 +27,16 @@ typedef struct MasterP
 {
     int nbPrime;
     int highestPrime;
-} *Master;
+};
+
+Master create_master()
+{
+    Master self = malloc(sizeof(struct MasterP));
+    self->highestPrime = 0;
+    self->nbPrime = 0;
+
+    return self;
+}
 
 
 /************************************************************************
@@ -40,128 +49,6 @@ static void usage(const char *exeName, const char *message)
     if (message != NULL)
         fprintf(stderr, "message : %s\n", message);
     exit(EXIT_FAILURE);
-}
-
-
-/************************************************************************
- * Fonctions auxiliaires
- ************************************************************************/
-
-static Master create_master()
-{
-    Master self = malloc(sizeof(struct MasterP));
-    self->highestPrime = 0;
-    self->nbPrime = 0;
-
-    return self;
-}
-
-static int my_semcreate(int nbSemaphores, int *initVal)
-{
-    key_t key;
-    int semId;
-    int ret;
-
-    key = ftok(MYFILE, PROJ_ID);
-    assert(key != -1);
-
-    semId = semget(key, nbSemaphores, IPC_CREAT | IPC_EXCL | 0641);
-    assert(semId != -1);
-
-    for(int i = 0; i < nbSemaphores; i++){
-        ret = semctl(semId, 0, SETALL, initVal[i]);
-        myassert(ret != -1, "Error my_semget : initialization failed");
-    }
-
-    return semId;
-}
-
-static int my_semget()
-{
-    key_t key;
-    int semId;
-
-    key = ftok(MYFILE, PROJ_ID);
-    assert(key != -1);
-
-    semId = semget(key, 0, 0);
-    assert(semId != -1);
-
-    return semId;
-}
-
-static void sem_take(int semId, int num_sem)
-{
-    struct sembuf op = {num_sem, -1, 0};
-    int ret;
-
-    ret = semop(semId, &op, 1);
-	myassert(ret != -1, "Error sem_take : failed");
-}
-
-static void sem_sell(int semId, int num_sem)
-{
-    struct sembuf op = {num_sem, 1, 0};
-    int ret;
-
-    ret = semop(semId, &op, 1);
-	myassert(ret != -1, "Error sem_sell : failed");
-}
-
-static void my_sem_destroy(int semId)
-{
-    int ret;
-
-    ret = semctl(semId, 0, IPC_RMID);
-    myassert(ret != -1, "Error my_sem_destroy : destruction failed");
-}
-
-static void my_mkfifo(const char *pathname)
-{
-    int ret;
-    ret = mkfifo(pathname, 0600);
-    myassert(ret != -1, "Error my_mkfifo : creation pipe failed");
-}
-
-static void my_unlink(const char *pathname)
-{
-    int ret = unlink(pathname);
-    myassert(ret != -1, "Error my_unlink : failed");
-}
-
-static int my_open(const char *pathname, int flags)
-{
-    int fd = open(pathname, flags);
-    myassert(fd != -1, "Error my_open : failed");
-
-    return fd;
-}
-
-static void my_close(int fd)
-{
-    int ret = close(fd);
-    myassert(ret != -1, "Error my_close : failed");
-}
-
-static void my_read(int fd, void *buf, size_t count)
-{
-    int ret = read(fd, buf, count);
-    myassert(ret != -1, "Error my_read : failed");
-}
-
-static void my_write(int fd, const void *buf, size_t count)
-{
-    int ret = write(fd, buf, count);
-    myassert(ret != -1, "Error my_write : failed");
-}
-
-static void create_worker()
-{
-    int fds[2];
-    pipe(fds);
-
-    if (fork() == 0)
-        execl("worker",fds[0], fds[1], NULL);
 }
 
 
@@ -254,15 +141,14 @@ int main(int argc, char * argv[])
 
     // - création des sémaphores
     int initVal[2] = {1, 0};
-    int semId = my_semget(2, initVal);
+    int semId = my_semcreate(2, initVal);
 
     // - création des tubes nommés
     my_mkfifo(PIPE_CLIENT_MASTER);
     my_mkfifo(PIPE_MASTER_CLIENT);
 
     // - création du premier worker
-    if (fork() == 0)
-        execl("worker",NULL);
+    /*Worker w = create_worker(NULL);*/
 
     // boucle infinie
     loop(self, semId);

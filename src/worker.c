@@ -18,8 +18,10 @@
 // a besoin : le nombre premier dont il a la charge, ...
 struct WorkerP
 {
-    int p; // le nombre dont il a la charge (P)
-} *Worker;
+    int p; // le nombre premier dont il a la charge (P)
+    int fd_prev; // tube pour recevoir des données du worker vourant
+    int fd_master; // tube pour communiquer avec le master
+};
 
 
 /************************************************************************

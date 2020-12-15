@@ -5,9 +5,13 @@
 //    - des constantes pour rendre plus lisible les comunications
 //    - des fonctions communes (écriture dans un tube, ...)
 
+// structure d'un worker
+struct WorkerP;
+typedef struct WorkerP *Worker;
+
+
 // Fonctions communes
-static void my_read(int fd, void *buf, size_t count);
-static void my_write(int fd, const void *buf, size_t count);
-static void my_close(int fd);
+void my_pipe(int pipefd[2]);
+Worker create_worker(Worker w);
 
 #endif
