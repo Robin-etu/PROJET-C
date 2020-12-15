@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdbool.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,7 +23,8 @@
 
 // on peut ici définir une structure stockant tout ce dont le master
 // a besoin
-typedef struct MasterP {
+typedef struct MasterP
+{
     int nbPrime;
     int highestPrime;
 } *Master;
@@ -54,7 +56,27 @@ static Master create_master()
     return self;
 }
 
-static int create_sem(int nbSem)
+static int my_semcreate(int nbSemaphores, int *initVal)
+{
+    key_t key;
+    int semId;
+    int ret;
+
+    key = ftok(MYFILE, PROJ_ID);
+    assert(key != -1);
+
+    semId = semget(key, nbSemaphores, IPC_CREAT | IPC_EXCL | 0641);
+    assert(semId != -1);
+
+    for(int i = 0; i < nbSemaphores; i++){
+        ret = semctl(semId, 0, SETALL, initVal[i]);
+        myassert(ret != -1, "Error my_semget : initialization failed");
+    }
+
+    return semId;
+}
+
+static int my_semget()
 {
     key_t key;
     int semId;
@@ -62,24 +84,91 @@ static int create_sem(int nbSem)
     key = ftok(MYFILE, PROJ_ID);
     assert(key != -1);
 
-    semId = semget(key, nbSem, IPC_CREAT | IPC_EXCL | 0641);
+    semId = semget(key, 0, 0);
     assert(semId != -1);
 
     return semId;
 }
 
-static void create_namedPipe(const char *name)
+static void sem_take(int semId, int num_sem)
+{
+    struct sembuf op = {num_sem, -1, 0};
+    int ret;
+
+    ret = semop(semId, &op, 1);
+	myassert(ret != -1, "Error sem_take : failed");
+}
+
+static void sem_sell(int semId, int num_sem)
+{
+    struct sembuf op = {num_sem, 1, 0};
+    int ret;
+
+    ret = semop(semId, &op, 1);
+	myassert(ret != -1, "Error sem_sell : failed");
+}
+
+static void my_sem_destroy(int semId)
 {
     int ret;
-    ret = mkfifo(name, 0600);
-    assert(ret != -1);
+
+    ret = semctl(semId, 0, IPC_RMID);
+    myassert(ret != -1, "Error my_sem_destroy : destruction failed");
+}
+
+static void my_mkfifo(const char *pathname)
+{
+    int ret;
+    ret = mkfifo(pathname, 0600);
+    myassert(ret != -1, "Error my_mkfifo : creation pipe failed");
+}
+
+static void my_unlink(const char *pathname)
+{
+    int ret = unlink(pathname);
+    myassert(ret != -1, "Error my_unlink : failed");
+}
+
+static int my_open(const char *pathname, int flags)
+{
+    int fd = open(pathname, flags);
+    myassert(fd != -1, "Error my_open : failed");
+
+    return fd;
+}
+
+static void my_close(int fd)
+{
+    int ret = close(fd);
+    myassert(ret != -1, "Error my_close : failed");
+}
+
+static void my_read(int fd, void *buf, size_t count)
+{
+    int ret = read(fd, buf, count);
+    myassert(ret != -1, "Error my_read : failed");
+}
+
+static void my_write(int fd, const void *buf, size_t count)
+{
+    int ret = write(fd, buf, count);
+    myassert(ret != -1, "Error my_write : failed");
+}
+
+static void create_worker()
+{
+    int fds[2];
+    pipe(fds);
+
+    if (fork() == 0)
+        execl("worker",fds[0], fds[1], NULL);
 }
 
 
 /************************************************************************
  * boucle principale de communication avec le client
  ************************************************************************/
-void loop(Master self, int semID)
+void loop(Master self, int semId)
 {
     // boucle infinie :
     // - ouverture des tubes (cf. rq client.c)
@@ -113,12 +202,39 @@ void loop(Master self, int semID)
     while(1)
     {
         // - ouverture des tubes (cf. rq client.c)
-        int fd1 = open(PIPE_CLIENT_MASTER, O_RDONLY);
-        assert(fd1 != -1);
-        int fd2 = open(PIPE_MASTER_CLIENT, O_WRONLY);
-        assert(fd2 != -1);
+        int fd1 = my_open(PIPE_CLIENT_MASTER, O_RDONLY);
+        int fd2 = my_open(PIPE_MASTER_CLIENT, O_WRONLY);
 
-        
+        // - attente d'un ordre du client (via le tube nommé)
+        my_read(fd1, &input, sizeof(int));
+
+        switch(input)
+        {
+            case ORDER_STOP : {
+
+            }
+
+            case ORDER_COMPUTE_PRIME : {
+
+            }
+
+            case ORDER_HOW_MANY_PRIME : {
+                // on, écrit la réponse sur le PIPE_MASTER_CLIENT
+                my_write(fd2, &(self->nbPrime), sizeof(int));
+            }
+
+            case ORDER_HIGHEST_PRIME : {
+                // on écrit la réponse sur le PIPE_MASTER_CLIENT
+                my_write(fd2, &(self->highestPrime), sizeof(int));
+            }
+        }
+
+        // - fermeture des tubes nommés
+        my_close(fd1);
+        my_close(fd2);
+
+        // - attendre ordre du client avant de continuer (2ème sémaphore)
+        sem_take(semId, 1);
     }
 
 }
@@ -137,21 +253,24 @@ int main(int argc, char * argv[])
     Master self = create_master();
 
     // - création des sémaphores
-    int semId = create_sem(2);
+    int initVal[2] = {1, 0};
+    int semId = my_semget(2, initVal);
 
     // - création des tubes nommés
-    create_namedPipe(PIPE_CLIENT_MASTER);
-    create_namedPipe(PIPE_MASTER_CLIENT);
+    my_mkfifo(PIPE_CLIENT_MASTER);
+    my_mkfifo(PIPE_MASTER_CLIENT);
 
     // - création du premier worker
+    if (fork() == 0)
+        execl("worker",NULL);
 
     // boucle infinie
     loop(self, semId);
 
     // destruction des tubes nommés, des sémaphores, ...
-    unlink(PIPE_CLIENT_MASTER);
-    unlink(PIPE_MASTER_CLIENT);
-    semctl(semId, -1, IPC_RMID);
+    my_unlink(PIPE_CLIENT_MASTER);
+    my_unlink(PIPE_MASTER_CLIENT);
+    my_sem_destroy(semId);
 
     return EXIT_SUCCESS;
 }

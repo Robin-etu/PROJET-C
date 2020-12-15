@@ -16,6 +16,10 @@
 
 // on peut ici définir une structure stockant tout ce dont le worker
 // a besoin : le nombre premier dont il a la charge, ...
+struct WorkerP
+{
+    int p; // le nombre dont il a la charge (P)
+} *Worker;
 
 
 /************************************************************************
