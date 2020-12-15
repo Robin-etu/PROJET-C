@@ -6,6 +6,14 @@
 //    - des fonctions communes (création tubes, écriture dans un tube,
 //      manipulation de sémaphores, ...)
 
+// fichier et identifiant utilisés comme paramètres de ftok pour créer une clé lors de l'utilisation de sémaphores dans les fichiers master.c et client.c
+#define MYFILE "./rapport.pdf"
+#define PROJ_ID 5
+
+// noms des tubes nommés utilisés pour communiquer entre le(s) client(s) et le master
+#define PIPE_MASTER_CLIENT "results"
+#define PIPE_CLIENT_MASTER "datas"
+
 // ordres possibles pour le master
 #define ORDER_NONE                0
 #define ORDER_STOP               -1

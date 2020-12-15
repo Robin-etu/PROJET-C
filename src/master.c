@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
 #include "myassert.h"
 
@@ -17,10 +22,10 @@
 
 // on peut ici définir une structure stockant tout ce dont le master
 // a besoin
-typedef struct {
+typedef struct MasterP {
     int nbPrime;
     int highestPrime;
-} *master;
+} *Master;
 
 
 /************************************************************************
@@ -37,9 +42,44 @@ static void usage(const char *exeName, const char *message)
 
 
 /************************************************************************
+ * Fonctions auxiliaires
+ ************************************************************************/
+
+static Master create_master()
+{
+    Master self = malloc(sizeof(struct MasterP));
+    self->highestPrime = 0;
+    self->nbPrime = 0;
+
+    return self;
+}
+
+static int create_sem(int nbSem)
+{
+    key_t key;
+    int semId;
+
+    key = ftok(MYFILE, PROJ_ID);
+    assert(key != -1);
+
+    semId = semget(key, nbSem, IPC_CREAT | IPC_EXCL | 0641);
+    assert(semId != -1);
+
+    return semId;
+}
+
+static void create_namedPipe(const char *name)
+{
+    int ret;
+    ret = mkfifo(name, 0600);
+    assert(ret != -1);
+}
+
+
+/************************************************************************
  * boucle principale de communication avec le client
  ************************************************************************/
-void loop(/* paramètres */)
+void loop(Master self, int semID)
 {
     // boucle infinie :
     // - ouverture des tubes (cf. rq client.c)
@@ -66,6 +106,21 @@ void loop(/* paramètres */)
     //
     // il est important d'ouvrir et fermer les tubes nommés à chaque itération
     // voyez-vous pourquoi ?
+
+    int input;
+    int order;
+
+    while(1)
+    {
+        // - ouverture des tubes (cf. rq client.c)
+        int fd1 = open(PIPE_CLIENT_MASTER, O_RDONLY);
+        assert(fd1 != -1);
+        int fd2 = open(PIPE_MASTER_CLIENT, O_WRONLY);
+        assert(fd2 != -1);
+
+        
+    }
+
 }
 
 
@@ -78,14 +133,25 @@ int main(int argc, char * argv[])
     if (argc != 1)
         usage(argv[0], NULL);
 
+    // - création et initialisation de la structure stockant tout ce dont a besoin le master
+    Master self = create_master();
+
     // - création des sémaphores
+    int semId = create_sem(2);
+
     // - création des tubes nommés
+    create_namedPipe(PIPE_CLIENT_MASTER);
+    create_namedPipe(PIPE_MASTER_CLIENT);
+
     // - création du premier worker
 
     // boucle infinie
-    loop(/* paramètres */);
+    loop(self, semId);
 
     // destruction des tubes nommés, des sémaphores, ...
+    unlink(PIPE_CLIENT_MASTER);
+    unlink(PIPE_MASTER_CLIENT);
+    semctl(semId, -1, IPC_RMID);
 
     return EXIT_SUCCESS;
 }
